@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Noto_Sans_TC } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 
-const inter = Inter({ subsets: ["latin"] });
+const noto = Noto_Sans_TC({ 
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
 
 export const metadata: Metadata = {
   title: "音控小組自動排班系統",
@@ -17,11 +20,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-TW">
-      <body className={`${inter.className} bg-black text-white`}>
+      <body className={`${noto.className} bg-zinc-950 text-zinc-100 antialiased`}>
         <div className="flex min-h-screen">
           <Sidebar />
-          <main className="flex-1 p-8 ml-64 overflow-auto">
-            {children}
+          <main className="flex-1 p-6 pt-16 md:p-10 md:ml-72 overflow-auto min-h-screen">
+            <div className="max-w-6xl mx-auto">
+              {children}
+            </div>
           </main>
         </div>
       </body>
