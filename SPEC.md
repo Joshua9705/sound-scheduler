@@ -12,13 +12,13 @@
 | 週日下午 | 必排 |
 
 ## 角色（每場需求人數）
-| 角色 | 每場人數 | 說明 |
-|------|---------|------|
-| PA（主控） | 1 | 必要 |
-| Stage（舞台） | 0-1 | 可為 0 |
-| 線上 (Online) | 0-1 | 可為 0 |
+| 角色 | 週六/週日 | 週四晚上 | 說明 |
+|------|----------|---------|------|
+| PA（主控） | 1（必要） | 1（必要） | 每場都要 |
+| Stage（舞台） | 1（必要） | 0-1（可為 0） | 僅週四可省略 |
+| 線上 (Online) | 0-1 | 0-1 | 可為 0 |
 
-每場 2-3 人。
+週六/週日每場 2-3 人，週四每場 1-3 人。
 
 ## 成員資料（13 人）
 
@@ -82,11 +82,23 @@
 
 ## 技術規格
 - **框架**：Next.js 15 (App Router)
-- **資料庫**：SQLite (better-sqlite3)
+- **資料庫**：Turso（libSQL / SQLite 相容）— `@libsql/client`
 - **樣式**：Tailwind CSS
-- **Port**：3002（避免與現有 scheduler-app 3001 衝突）
+- **部署**：Vercel（Serverless）
 - **語言**：繁體中文介面
 - **專案目錄**：`/home/alanclaw/.openclaw/workspace/sound-scheduler`
+
+## 環境變數
+```
+TURSO_DATABASE_URL=libsql://<REDACTED_DB_URL>
+TURSO_AUTH_TOKEN=<REDACTED_TOKEN>
+```
+
+## 資料庫 Schema（已在 Turso 建立完成）
+
+Tables: members, time_slots, member_slots, roles, member_roles, schedules, assignments, slot_role_requirements, configurations
+
+所有 DB 操作必須使用 `@libsql/client` 的非同步 API（`await db.execute()`、`await db.batch()`）。
 
 ## UI 風格
 - 深色主題（Dark mode）
