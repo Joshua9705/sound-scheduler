@@ -63,7 +63,7 @@ export async function POST(request: Request) {
   }
 
   // Load all data
-  const [membersRes, slotsRes, rolesRes, memberSlotsRes, memberRolesRes, slotReqsRes, configRes, thursdaySignupsRes] = await Promise.all([
+  const [membersRes, slotsRes, rolesRes, memberSlotsRes, memberRolesRes, slotReqsRes, configRes, thursdaySignupsRes, exclusionPairsRes] = await Promise.all([
     db.execute("SELECT * FROM members WHERE active = 1"),
     db.execute("SELECT * FROM time_slots"),
     db.execute("SELECT * FROM roles"),
@@ -72,6 +72,7 @@ export async function POST(request: Request) {
     db.execute("SELECT * FROM slot_role_requirements"),
     db.execute("SELECT * FROM configurations"),
     db.execute("SELECT * FROM thursday_signups ORDER BY date, role_id, created_at"),
+    db.execute("SELECT * FROM exclusion_pairs"),
   ]);
 
   const config: Record<string, string> = {};
@@ -94,6 +95,20 @@ export async function POST(request: Request) {
     isFallback: Number(r.is_fallback) === 1,
     preferredSlotId: r.preferred_slot_id !== null && r.preferred_slot_id !== undefined ? Number(r.preferred_slot_id) : null,
   }));
+
+  // Build exclusion pairs: members that cannot be scheduled in the same date+slot
+  const exclusionPairs: { a: number; b: number }[] = exclusionPairsRes.rows.map((r: any) => ({
+    a: Number(r.member_a_id),
+    b: Number(r.member_b_id),
+  }));
+
+  const isExcluded = (memberId: number, sessionMemberIds: number[]): boolean => {
+    return exclusionPairs.some(
+      (p) =>
+        (p.a === memberId && sessionMemberIds.includes(p.b)) ||
+        (p.b === memberId && sessionMemberIds.includes(p.a))
+    );
+  };
 
   const slots = slotsRes.rows.map((r: any) => ({
     id: Number(r.id),
@@ -233,7 +248,8 @@ export async function POST(request: Request) {
             .filter((m) => !assignedThisDate.has(m.id))
             .filter((m) => !sessionAssignments.some((a) => a.memberId === m.id))
             .filter((m) => m.roles.some((r) => r.roleId === req.roleId))
-            .filter((m) => isWithinLimit(m));
+            .filter((m) => isWithinLimit(m))
+            .filter((m) => !isExcluded(m.id, sessionAssignments.map((a) => a.memberId)));
 
           // Sort: prefer preferred slot members first, then least assigned, then by level
           regularCandidates.sort((a, b) => {
@@ -405,6 +421,12 @@ export async function POST(request: Request) {
             ).length;
 
             if (currentCount < req.maxCount) {
+              // Check exclusion pairs
+              const sessionMemberIds = allAssignments
+                .filter((a) => a.date === date && a.slotId === slot.id)
+                .map((a) => a.memberId);
+              if (isExcluded(member.id, sessionMemberIds)) continue;
+
               const needsPairing = member.level >= 3 || memberRole.isLearning;
               if (needsPairing) {
                 const sessionHasHighLevel = allAssignments
