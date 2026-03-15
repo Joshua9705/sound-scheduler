@@ -364,18 +364,25 @@ export async function POST(request: Request) {
     }
   }
 
-  // === GUARANTEE: Every non-fallback active member gets at least 1 assignment per quarter ===
-  const assignedMemberIds = new Set(allAssignments.map((a) => a.memberId));
-  const unassignedMembers = members.filter((m) => !m.isFallback && !assignedMemberIds.has(m.id));
+  // === GUARANTEE: Every non-fallback active member gets at least 1 assignment per MONTH ===
+  for (const { year, month } of months) {
+    const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+    if (!monthlySlotCount[monthKey]) monthlySlotCount[monthKey] = {};
 
-  for (const member of unassignedMembers) {
-    let placed = false;
-    // Try to find a slot where this member can fill a max_count gap (as 2nd PA, etc.)
-    for (const { year, month } of months) {
-      if (placed) break;
+    // Find members with 0 assignments this month
+    const nonFallbackMembers = members.filter((m) => !m.isFallback);
+    for (const member of nonFallbackMembers) {
+      const totalThisMonth = Object.entries(monthlySlotCount[monthKey])
+        .filter(([k]) => k.startsWith(`${member.id}:`))
+        .reduce((sum, [, v]) => sum + v, 0);
+
+      if (totalThisMonth > 0) continue; // already assigned this month
+
+      let placed = false;
       for (const slot of slots) {
         if (placed) break;
-        if (!member.slotIds.includes(slot.id)) continue; // member not available for this slot
+        if (slot.id === 1) continue; // skip Thursday (signup-based)
+        if (!member.slotIds.includes(slot.id)) continue;
 
         const dates = getDatesForDayInMonth(year, month, slot.dayOfWeek);
         const reqs = slotReqs.filter((sr) => sr.slotId === slot.id);
@@ -387,20 +394,17 @@ export async function POST(request: Request) {
           );
           if (assignedThisDate.has(member.id)) continue;
 
-          // Check each role this member can do
           for (const req of reqs) {
             if (placed) break;
             if (req.maxCount === 0) continue;
             const memberRole = member.roles.find((r) => r.roleId === req.roleId);
             if (!memberRole) continue;
 
-            // Count current assignments for this date+slot+role
             const currentCount = allAssignments.filter(
               (a) => a.date === date && a.slotId === slot.id && a.roleId === req.roleId
             ).length;
 
             if (currentCount < req.maxCount) {
-              // Check pairing: if member is level 3-4 or learning, need a level 1-2 in the session
               const needsPairing = member.level >= 3 || memberRole.isLearning;
               if (needsPairing) {
                 const sessionHasHighLevel = allAssignments
@@ -409,7 +413,7 @@ export async function POST(request: Request) {
                     const m = members.find((mm) => mm.id === a.memberId);
                     return m && m.level <= 2;
                   });
-                if (!sessionHasHighLevel) continue; // skip, no senior to pair with
+                if (!sessionHasHighLevel) continue;
               }
 
               allAssignments.push({
@@ -418,9 +422,6 @@ export async function POST(request: Request) {
                 roleId: req.roleId,
                 memberId: member.id,
               });
-              // Update monthly slot count
-              const monthKey = `${year}-${String(month).padStart(2, "0")}`;
-              if (!monthlySlotCount[monthKey]) monthlySlotCount[monthKey] = {};
               const key = `${member.id}:${slot.id}`;
               monthlySlotCount[monthKey][key] = (monthlySlotCount[monthKey][key] || 0) + 1;
               placed = true;
@@ -428,10 +429,10 @@ export async function POST(request: Request) {
           }
         }
       }
-    }
 
-    if (!placed) {
-      warnings.push(`⚠️ ${member.name} 整季無法排入任何班次（請檢查時段與角色設定）`);
+      if (!placed) {
+        warnings.push(`⚠️ ${monthKey} — ${member.name} 無法排入任何班次（請檢查時段與角色設定）`);
+      }
     }
   }
 
