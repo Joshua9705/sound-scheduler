@@ -346,10 +346,10 @@ export async function POST(request: Request) {
           }
 
           // Last resort: use 聚會管理人 (fallback) to fill remaining spots
+          // Note: fallback members CAN serve multiple slots on the same day
           if (filled < needed) {
             const fallbackCandidates = eligibleForSlot
               .filter((m) => m.isFallback)
-              .filter((m) => !assignedThisDate.has(m.id))
               .filter((m) => !sessionAssignments.some((a) => a.memberId === m.id))
               .filter((m) => m.roles.some((r) => r.roleId === req.roleId))
               .filter((m) => !isExcluded(m.id, sessionAssignments.map((a) => a.memberId)));
