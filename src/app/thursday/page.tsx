@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ClipboardCheck, Calendar, Users, AlertCircle, CheckCircle2, Loader2, ChevronLeft, ChevronRight, Lock, LogOut } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 
 interface Member {
   id: number;
@@ -76,6 +77,7 @@ function nextQuarter(q: string): string {
 }
 
 export default function ThursdayPage() {
+  const { isAdmin, login, logout } = useAuth();
   const [quarter, setQuarter] = useState(getCurrentQuarter());
   const [data, setData] = useState<ThursdayData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -83,8 +85,6 @@ export default function ThursdayPage() {
 
   // Identity: which member am I?
   const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
-  // Admin mode: can see all
-  const [isAdmin, setIsAdmin] = useState(false);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminPin, setAdminPin] = useState("");
   const [adminError, setAdminError] = useState("");
@@ -93,11 +93,6 @@ export default function ThursdayPage() {
   useEffect(() => {
     const savedId = localStorage.getItem("thursday_member_id");
     if (savedId) setSelectedMemberId(Number(savedId));
-    const savedAdmin = localStorage.getItem("scheduler_role");
-    const expiry = localStorage.getItem("scheduler_expiry");
-    if (savedAdmin === "admin" && expiry && Date.now() < parseInt(expiry)) {
-      setIsAdmin(true);
-    }
   }, []);
 
   const fetchData = useCallback(async (q: string) => {
@@ -122,26 +117,17 @@ export default function ThursdayPage() {
 
   const handleAdminLogin = async () => {
     setAdminError("");
-    const res = await fetch("/api/auth", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin: adminPin }),
-    });
-    if (res.ok) {
-      setIsAdmin(true);
+    const ok = await login(adminPin);
+    if (ok) {
       setShowAdminLogin(false);
       setAdminPin("");
-      localStorage.setItem("scheduler_role", "admin");
-      localStorage.setItem("scheduler_expiry", String(Date.now() + 24 * 60 * 60 * 1000));
     } else {
       setAdminError("密碼錯誤");
     }
   };
 
   const handleAdminLogout = () => {
-    setIsAdmin(false);
-    localStorage.removeItem("scheduler_role");
-    localStorage.removeItem("scheduler_expiry");
+    logout();
   };
 
   const getSignup = (memberId: number, date: string, roleId: number): Signup | undefined => {

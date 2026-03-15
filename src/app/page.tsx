@@ -5,6 +5,7 @@ import {
   Clock, 
   Award 
 } from "lucide-react";
+import AdminGuard from "@/components/AdminGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,7 @@ export default async function Dashboard() {
   `, [latestSchedule]);
 
   return (
+    <AdminGuard>
     <div className="space-y-10">
       <header>
         <h2 className="text-3xl font-bold tracking-tight">👋 儀表板概覽</h2>
@@ -96,6 +98,7 @@ export default async function Dashboard() {
         </section>
       </div>
     </div>
+    </AdminGuard>
   );
 }
 

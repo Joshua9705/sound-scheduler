@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Noto_Sans_TC } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
+import { AuthProvider } from "@/lib/auth";
 
 const noto = Noto_Sans_TC({ 
   subsets: ["latin"],
@@ -21,14 +22,16 @@ export default function RootLayout({
   return (
     <html lang="zh-TW">
       <body className={`${noto.className} bg-zinc-950 text-zinc-100 antialiased`}>
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <main className="flex-1 p-6 pt-16 md:p-10 md:ml-72 overflow-auto min-h-screen">
-            <div className="max-w-6xl mx-auto">
-              {children}
-            </div>
-          </main>
-        </div>
+        <AuthProvider>
+          <div className="flex min-h-screen">
+            <Sidebar />
+            <main className="flex-1 p-6 pt-16 md:p-10 md:ml-72 overflow-auto min-h-screen">
+              <div className="max-w-6xl mx-auto">
+                {children}
+              </div>
+            </main>
+          </div>
+        </AuthProvider>
       </body>
     </html>
   );

@@ -11,6 +11,7 @@ import {
   Save,
   Loader2,
 } from "lucide-react";
+import AdminGuard from "@/components/AdminGuard";
 
 interface Role {
   id: number;
@@ -441,6 +442,7 @@ export default function MembersPage() {
   }
 
   return (
+    <AdminGuard>
     <div className="space-y-8">
       <header className="flex items-start justify-between">
         <div>
@@ -751,5 +753,6 @@ export default function MembersPage() {
         </div>
       </div>
     </div>
+    </AdminGuard>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 
 interface Assignment {
   id: number;
@@ -23,6 +24,7 @@ const SLOT_ORDER = [
 ];
 
 export default function SchedulePage() {
+  const { isAdmin } = useAuth();
   const currentYear = new Date().getFullYear();
   const currentQ = Math.ceil((new Date().getMonth() + 1) / 3);
 
@@ -186,18 +188,22 @@ export default function SchedulePage() {
                                     <span className={`px-2 py-0.5 rounded text-xs border ${roleColor(a.role_name)}`}>
                                       {a.role_name}
                                     </span>
-                                    <select
-                                      value={a.member_id}
-                                      onChange={(e) => handleSwap(a.id, Number(e.target.value))}
-                                      className={`bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-sm ${levelColor(a.member_level)} focus:border-blue-500 focus:outline-none`}
-                                    >
-                                      {members.map((m: any) => (
-                                        <option key={m.id} value={m.id}>{m.name} (Lv{m.level})</option>
-                                      ))}
-                                    </select>
+                                    {isAdmin ? (
+                                      <select
+                                        value={a.member_id}
+                                        onChange={(e) => handleSwap(a.id, Number(e.target.value))}
+                                        className={`bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-sm ${levelColor(a.member_level)} focus:border-blue-500 focus:outline-none`}
+                                      >
+                                        {members.map((m: any) => (
+                                          <option key={m.id} value={m.id}>{m.name} (Lv{m.level})</option>
+                                        ))}
+                                      </select>
+                                    ) : (
+                                      <span className={`text-sm font-medium ${levelColor(a.member_level)}`}>{a.member_name}</span>
+                                    )}
                                   </div>
                                 ))}
-                                {warnings.map((w, i) => (
+                                {isAdmin && warnings.map((w, i) => (
                                   <div key={i} className="flex items-center gap-1 text-amber-500 text-xs">
                                     <AlertTriangle className="w-3 h-3" />
                                     {w}
