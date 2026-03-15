@@ -18,12 +18,14 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
-const allMenuItems = [
-  { name: "儀表板", href: "/", icon: LayoutDashboard, minRole: "admin" as const },
-  { name: "人員管理", href: "/members", icon: Users, minRole: "admin" as const },
-  { name: "週四報名", href: "/thursday", icon: ClipboardCheck, minRole: "visitor" as const },
-  { name: "產出班表", href: "/generate", icon: CalendarPlus, minRole: "admin" as const },
-  { name: "查看班表", href: "/schedule", icon: CalendarDays, minRole: "visitor" as const },
+type MinRole = "admin" | "scheduler" | "visitor";
+
+const allMenuItems: { name: string; href: string; icon: any; minRole: MinRole }[] = [
+  { name: "儀表板", href: "/", icon: LayoutDashboard, minRole: "admin" },
+  { name: "人員管理", href: "/members", icon: Users, minRole: "admin" },
+  { name: "週四報名", href: "/thursday", icon: ClipboardCheck, minRole: "visitor" },
+  { name: "產出班表", href: "/generate", icon: CalendarPlus, minRole: "admin" },
+  { name: "查看班表", href: "/schedule", icon: CalendarDays, minRole: "visitor" },
 ];
 
 const roleLabels = {
