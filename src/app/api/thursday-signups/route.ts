@@ -75,7 +75,7 @@ export async function GET(request: Request) {
       WHERE ts.date IN (${allDates.map(() => "?").join(",")})
       ORDER BY ts.date, ts.role_id, ts.created_at
     `, allDates.length > 0 ? allDates : [""]),
-    db.execute("SELECT id, name FROM members WHERE active = 1 ORDER BY id"),
+    db.execute("SELECT id, name FROM members WHERE active = 1 AND is_fallback = 0 ORDER BY id"),
   ]);
 
   return NextResponse.json({
