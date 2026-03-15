@@ -165,7 +165,7 @@ export default function ThursdayPage() {
 
   // Which members to show
   const visibleMembers = data?.members.filter((m) => {
-    if (isScheduler) return true; // admin sees all
+    if (isAdmin) return true; // admin sees all
     return m.id === selectedMemberId; // regular user sees only themselves
   }) ?? [];
 
@@ -183,7 +183,7 @@ export default function ThursdayPage() {
   if (!data) return null;
 
   // Step 1: If not admin and no member selected, show member selector
-  if (!isScheduler && !selectedMemberId) {
+  if (!isAdmin && !selectedMemberId) {
     return (
       <div className="space-y-6 max-w-lg mx-auto">
         <div className="text-center pt-8">
@@ -254,7 +254,7 @@ export default function ThursdayPage() {
             </div>
             週四報名
           </h1>
-          {isScheduler ? (
+          {isAdmin ? (
             <div className="flex items-center gap-2 mt-1 ml-1">
               <span className="text-amber-400 text-sm font-medium">🔓 管理員模式 — 查看所有人報名</span>
               <button onClick={handleAdminLogout} className="text-zinc-500 hover:text-zinc-300 text-xs flex items-center gap-1 transition-colors">
@@ -353,7 +353,7 @@ export default function ThursdayPage() {
                   const paKey = `${member.id}:${date}:1`;
                   const stageKey = `${member.id}:${date}:2`;
                   // Only allow toggle for own row (or admin)
-                  const canToggle = isScheduler || member.id === selectedMemberId;
+                  const canToggle = isAdmin || member.id === selectedMemberId;
 
                   return (
                     <td key={date} className="px-3 py-3 text-center">
@@ -392,7 +392,7 @@ export default function ThursdayPage() {
             ))}
 
             {/* Summary Row — only for admin */}
-            {isScheduler && (
+            {isAdmin && (
               <tr className="bg-zinc-900/50 border-t border-zinc-700/50">
                 <td className="px-5 py-3 text-xs font-semibold text-zinc-400 uppercase tracking-wider">
                   <div className="flex items-center gap-2">
@@ -427,7 +427,7 @@ export default function ThursdayPage() {
                 <Calendar className="w-4 h-4 text-zinc-500" />
                 <span className="font-semibold text-white">{formatDate(date)} 週四</span>
               </div>
-              {isScheduler && (
+              {isAdmin && (
                 <div className="flex gap-2 text-xs">
                   <span className={`px-2 py-0.5 rounded-md font-bold ${
                     getDateCount(date, 1) >= 1 ? "text-blue-300 bg-blue-950/50" : "text-zinc-600 bg-zinc-800/50"
@@ -444,7 +444,7 @@ export default function ThursdayPage() {
                 const stageSignup = getSignup(member.id, date, 2);
                 const paKey = `${member.id}:${date}:1`;
                 const stageKey = `${member.id}:${date}:2`;
-                const canToggle = isScheduler || member.id === selectedMemberId;
+                const canToggle = isAdmin || member.id === selectedMemberId;
 
                 return (
                   <div key={member.id} className="px-4 py-3 flex items-center justify-between">
