@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { ClipboardCheck, Calendar, Users, AlertCircle, CheckCircle2, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { ClipboardCheck, Calendar, Users, AlertCircle, CheckCircle2, Loader2, ChevronLeft, ChevronRight, Lock, LogOut } from "lucide-react";
 
 interface Member {
   id: number;
@@ -79,7 +79,26 @@ export default function ThursdayPage() {
   const [quarter, setQuarter] = useState(getCurrentQuarter());
   const [data, setData] = useState<ThursdayData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [toggling, setToggling] = useState<string | null>(null); // "memberId:date:roleId"
+  const [toggling, setToggling] = useState<string | null>(null);
+
+  // Identity: which member am I?
+  const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
+  // Admin mode: can see all
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [adminPin, setAdminPin] = useState("");
+  const [adminError, setAdminError] = useState("");
+
+  // Restore from localStorage
+  useEffect(() => {
+    const savedId = localStorage.getItem("thursday_member_id");
+    if (savedId) setSelectedMemberId(Number(savedId));
+    const savedAdmin = localStorage.getItem("scheduler_role");
+    const expiry = localStorage.getItem("scheduler_expiry");
+    if (savedAdmin === "admin" && expiry && Date.now() < parseInt(expiry)) {
+      setIsAdmin(true);
+    }
+  }, []);
 
   const fetchData = useCallback(async (q: string) => {
     setLoading(true);
@@ -95,6 +114,35 @@ export default function ThursdayPage() {
   useEffect(() => {
     fetchData(quarter);
   }, [quarter, fetchData]);
+
+  const handleSelectMember = (id: number) => {
+    setSelectedMemberId(id);
+    localStorage.setItem("thursday_member_id", String(id));
+  };
+
+  const handleAdminLogin = async () => {
+    setAdminError("");
+    const res = await fetch("/api/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pin: adminPin }),
+    });
+    if (res.ok) {
+      setIsAdmin(true);
+      setShowAdminLogin(false);
+      setAdminPin("");
+      localStorage.setItem("scheduler_role", "admin");
+      localStorage.setItem("scheduler_expiry", String(Date.now() + 24 * 60 * 60 * 1000));
+    } else {
+      setAdminError("密碼錯誤");
+    }
+  };
+
+  const handleAdminLogout = () => {
+    setIsAdmin(false);
+    localStorage.removeItem("scheduler_role");
+    localStorage.removeItem("scheduler_expiry");
+  };
 
   const getSignup = (memberId: number, date: string, roleId: number): Signup | undefined => {
     return data?.signups.find(
@@ -125,10 +173,15 @@ export default function ThursdayPage() {
     }
   };
 
-  // Count per date
   const getDateCount = (date: string, roleId: number): number => {
     return data?.signups.filter((s) => s.date === date && s.role_id === roleId).length ?? 0;
   };
+
+  // Which members to show
+  const visibleMembers = data?.members.filter((m) => {
+    if (isAdmin) return true; // admin sees all
+    return m.id === selectedMemberId; // regular user sees only themselves
+  }) ?? [];
 
   if (loading) {
     return (
@@ -143,6 +196,67 @@ export default function ThursdayPage() {
 
   if (!data) return null;
 
+  // Step 1: If not admin and no member selected, show member selector
+  if (!isAdmin && !selectedMemberId) {
+    return (
+      <div className="space-y-6 max-w-lg mx-auto">
+        <div className="text-center pt-8">
+          <div className="p-3 bg-blue-600/20 rounded-2xl inline-block mb-4">
+            <ClipboardCheck className="w-10 h-10 text-blue-400" />
+          </div>
+          <h1 className="text-2xl font-bold text-white">週四報名</h1>
+          <p className="text-zinc-500 mt-2">請先選擇你的名字</p>
+        </div>
+
+        <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl overflow-hidden">
+          <div className="divide-y divide-zinc-800/30">
+            {data.members.map((member) => (
+              <button
+                key={member.id}
+                onClick={() => handleSelectMember(member.id)}
+                className="w-full px-5 py-4 flex items-center gap-3 hover:bg-zinc-800/40 transition-colors text-left"
+              >
+                <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${getGradient(member.id)} flex items-center justify-center text-white font-bold`}>
+                  {getInitials(member.name)}
+                </div>
+                <span className="text-white font-medium">{member.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Admin login link */}
+        <div className="text-center">
+          {showAdminLogin ? (
+            <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl p-5 space-y-3 max-w-xs mx-auto">
+              <p className="text-sm text-zinc-400">輸入管理員密碼查看所有報名</p>
+              <input
+                type="password"
+                value={adminPin}
+                onChange={(e) => setAdminPin(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAdminLogin()}
+                placeholder="密碼"
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                autoFocus
+              />
+              {adminError && <p className="text-red-400 text-xs">{adminError}</p>}
+              <div className="flex gap-2">
+                <button onClick={handleAdminLogin} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg">登入</button>
+                <button onClick={() => { setShowAdminLogin(false); setAdminPin(""); setAdminError(""); }} className="flex-1 bg-zinc-700 hover:bg-zinc-600 text-white text-sm py-2 rounded-lg">取消</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setShowAdminLogin(true)} className="text-zinc-600 hover:text-zinc-400 text-xs flex items-center gap-1 mx-auto transition-colors">
+              <Lock className="w-3 h-3" /> 管理員查看全部
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const selectedMember = data.members.find((m) => m.id === selectedMemberId);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -154,7 +268,26 @@ export default function ThursdayPage() {
             </div>
             週四報名
           </h1>
-          <p className="text-zinc-500 mt-1 ml-1">點擊欄位切換報名狀態</p>
+          {isAdmin ? (
+            <div className="flex items-center gap-2 mt-1 ml-1">
+              <span className="text-amber-400 text-sm font-medium">🔓 管理員模式 — 查看所有人報名</span>
+              <button onClick={handleAdminLogout} className="text-zinc-500 hover:text-zinc-300 text-xs flex items-center gap-1 transition-colors">
+                <LogOut className="w-3 h-3" /> 登出
+              </button>
+            </div>
+          ) : selectedMember ? (
+            <div className="flex items-center gap-2 mt-1 ml-1">
+              <span className="text-zinc-500 text-sm">
+                登記為：<span className="text-white font-medium">{selectedMember.name}</span>
+              </span>
+              <button
+                onClick={() => { setSelectedMemberId(null); localStorage.removeItem("thursday_member_id"); }}
+                className="text-zinc-600 hover:text-zinc-400 text-xs underline transition-colors"
+              >
+                切換
+              </button>
+            </div>
+          ) : null}
         </div>
 
         {/* Quarter selector */}
@@ -218,7 +351,7 @@ export default function ThursdayPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-800/30">
-            {data.members.map((member) => (
+            {visibleMembers.map((member) => (
               <tr key={member.id} className="hover:bg-zinc-800/20 transition-colors">
                 <td className="px-5 py-4">
                   <div className="flex items-center gap-3">
@@ -233,45 +366,37 @@ export default function ThursdayPage() {
                   const stageSignup = getSignup(member.id, date, 2);
                   const paKey = `${member.id}:${date}:1`;
                   const stageKey = `${member.id}:${date}:2`;
+                  // Only allow toggle for own row (or admin)
+                  const canToggle = isAdmin || member.id === selectedMemberId;
 
                   return (
                     <td key={date} className="px-3 py-3 text-center">
                       <div className="flex flex-col gap-1.5 items-center">
-                        {/* PA Toggle */}
                         <button
-                          onClick={() => handleToggle(member, date, 1)}
-                          disabled={!data.isOpen || toggling === paKey}
+                          onClick={() => canToggle && handleToggle(member, date, 1)}
+                          disabled={!data.isOpen || toggling === paKey || !canToggle}
                           className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all min-w-[52px] ${
                             paSignup
                               ? "bg-blue-600 text-white shadow-sm shadow-blue-600/30"
-                              : data.isOpen
+                              : data.isOpen && canToggle
                               ? "bg-zinc-800 text-zinc-500 hover:bg-zinc-700 hover:text-zinc-300"
                               : "bg-zinc-800/50 text-zinc-600 cursor-default"
                           } ${toggling === paKey ? "opacity-50" : ""}`}
                         >
-                          {toggling === paKey ? (
-                            <Loader2 className="w-3 h-3 animate-spin mx-auto" />
-                          ) : (
-                            "PA"
-                          )}
+                          {toggling === paKey ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : "PA"}
                         </button>
-                        {/* Stage Toggle */}
                         <button
-                          onClick={() => handleToggle(member, date, 2)}
-                          disabled={!data.isOpen || toggling === stageKey}
+                          onClick={() => canToggle && handleToggle(member, date, 2)}
+                          disabled={!data.isOpen || toggling === stageKey || !canToggle}
                           className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all min-w-[52px] ${
                             stageSignup
                               ? "bg-emerald-600 text-white shadow-sm shadow-emerald-600/30"
-                              : data.isOpen
+                              : data.isOpen && canToggle
                               ? "bg-zinc-800 text-zinc-500 hover:bg-zinc-700 hover:text-zinc-300"
                               : "bg-zinc-800/50 text-zinc-600 cursor-default"
                           } ${toggling === stageKey ? "opacity-50" : ""}`}
                         >
-                          {toggling === stageKey ? (
-                            <Loader2 className="w-3 h-3 animate-spin mx-auto" />
-                          ) : (
-                            "台"
-                          )}
+                          {toggling === stageKey ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : "台"}
                         </button>
                       </div>
                     </td>
@@ -280,114 +405,97 @@ export default function ThursdayPage() {
               </tr>
             ))}
 
-            {/* Summary Row */}
-            <tr className="bg-zinc-900/50 border-t border-zinc-700/50">
-              <td className="px-5 py-3 text-xs font-semibold text-zinc-400 uppercase tracking-wider">
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4" />
-                  小計
-                </div>
-              </td>
-              {data.dates.map((date) => (
-                <td key={date} className="px-3 py-3 text-center">
-                  <div className="flex flex-col gap-1 items-center">
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${
-                      getDateCount(date, 1) >= 1
-                        ? "text-blue-300 bg-blue-950/50"
-                        : "text-zinc-600 bg-zinc-800/50"
-                    }`}>
-                      PA: {getDateCount(date, 1)}
-                    </span>
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${
-                      getDateCount(date, 2) >= 1
-                        ? "text-emerald-300 bg-emerald-950/50"
-                        : "text-zinc-600 bg-zinc-800/50"
-                    }`}>
-                      台: {getDateCount(date, 2)}
-                    </span>
+            {/* Summary Row — only for admin */}
+            {isAdmin && (
+              <tr className="bg-zinc-900/50 border-t border-zinc-700/50">
+                <td className="px-5 py-3 text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4" />
+                    小計
                   </div>
                 </td>
-              ))}
-            </tr>
+                {data.dates.map((date) => (
+                  <td key={date} className="px-3 py-3 text-center">
+                    <div className="flex flex-col gap-1 items-center">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${
+                        getDateCount(date, 1) >= 1 ? "text-blue-300 bg-blue-950/50" : "text-zinc-600 bg-zinc-800/50"
+                      }`}>PA: {getDateCount(date, 1)}</span>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${
+                        getDateCount(date, 2) >= 1 ? "text-emerald-300 bg-emerald-950/50" : "text-zinc-600 bg-zinc-800/50"
+                      }`}>台: {getDateCount(date, 2)}</span>
+                    </div>
+                  </td>
+                ))}
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
       {/* Mobile Cards */}
       <div className="md:hidden space-y-4">
-        {data.dates.map((date) => {
-          const paSignups = data.signups.filter((s) => s.date === date && s.role_id === 1);
-          const stageSignups = data.signups.filter((s) => s.date === date && s.role_id === 2);
-
-          return (
-            <div key={date} className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-zinc-800/50 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-zinc-500" />
-                  <span className="font-semibold text-white">{formatDate(date)} 週四</span>
-                </div>
+        {data.dates.map((date) => (
+          <div key={date} className="bg-zinc-900/50 border border-zinc-800/50 rounded-xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-zinc-800/50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-zinc-500" />
+                <span className="font-semibold text-white">{formatDate(date)} 週四</span>
+              </div>
+              {isAdmin && (
                 <div className="flex gap-2 text-xs">
                   <span className={`px-2 py-0.5 rounded-md font-bold ${
-                    paSignups.length >= 1 ? "text-blue-300 bg-blue-950/50" : "text-zinc-600 bg-zinc-800/50"
-                  }`}>PA: {paSignups.length}</span>
+                    getDateCount(date, 1) >= 1 ? "text-blue-300 bg-blue-950/50" : "text-zinc-600 bg-zinc-800/50"
+                  }`}>PA: {getDateCount(date, 1)}</span>
                   <span className={`px-2 py-0.5 rounded-md font-bold ${
-                    stageSignups.length >= 1 ? "text-emerald-300 bg-emerald-950/50" : "text-zinc-600 bg-zinc-800/50"
-                  }`}>台: {stageSignups.length}</span>
+                    getDateCount(date, 2) >= 1 ? "text-emerald-300 bg-emerald-950/50" : "text-zinc-600 bg-zinc-800/50"
+                  }`}>台: {getDateCount(date, 2)}</span>
                 </div>
-              </div>
-              <div className="divide-y divide-zinc-800/30">
-                {data.members.map((member) => {
-                  const paSignup = getSignup(member.id, date, 1);
-                  const stageSignup = getSignup(member.id, date, 2);
-                  const paKey = `${member.id}:${date}:1`;
-                  const stageKey = `${member.id}:${date}:2`;
-
-                  return (
-                    <div key={member.id} className="px-4 py-3 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getGradient(member.id)} flex items-center justify-center text-white text-sm font-bold`}>
-                          {getInitials(member.name)}
-                        </div>
-                        <span className="text-sm text-white">{member.name}</span>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleToggle(member, date, 1)}
-                          disabled={!data.isOpen || toggling === paKey}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                            paSignup
-                              ? "bg-blue-600 text-white"
-                              : data.isOpen
-                              ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
-                              : "bg-zinc-800/50 text-zinc-600 cursor-default"
-                          }`}
-                        >
-                          {toggling === paKey ? <Loader2 className="w-3 h-3 animate-spin" /> : "PA"}
-                        </button>
-                        <button
-                          onClick={() => handleToggle(member, date, 2)}
-                          disabled={!data.isOpen || toggling === stageKey}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                            stageSignup
-                              ? "bg-emerald-600 text-white"
-                              : data.isOpen
-                              ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
-                              : "bg-zinc-800/50 text-zinc-600 cursor-default"
-                          }`}
-                        >
-                          {toggling === stageKey ? <Loader2 className="w-3 h-3 animate-spin" /> : "台"}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              )}
             </div>
-          );
-        })}
+            <div className="divide-y divide-zinc-800/30">
+              {visibleMembers.map((member) => {
+                const paSignup = getSignup(member.id, date, 1);
+                const stageSignup = getSignup(member.id, date, 2);
+                const paKey = `${member.id}:${date}:1`;
+                const stageKey = `${member.id}:${date}:2`;
+                const canToggle = isAdmin || member.id === selectedMemberId;
+
+                return (
+                  <div key={member.id} className="px-4 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getGradient(member.id)} flex items-center justify-center text-white text-sm font-bold`}>
+                        {getInitials(member.name)}
+                      </div>
+                      <span className="text-sm text-white">{member.name}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => canToggle && handleToggle(member, date, 1)}
+                        disabled={!data.isOpen || toggling === paKey || !canToggle}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                          paSignup ? "bg-blue-600 text-white" : data.isOpen && canToggle ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700" : "bg-zinc-800/50 text-zinc-600 cursor-default"
+                        }`}
+                      >
+                        {toggling === paKey ? <Loader2 className="w-3 h-3 animate-spin" /> : "PA"}
+                      </button>
+                      <button
+                        onClick={() => canToggle && handleToggle(member, date, 2)}
+                        disabled={!data.isOpen || toggling === stageKey || !canToggle}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                          stageSignup ? "bg-emerald-600 text-white" : data.isOpen && canToggle ? "bg-zinc-800 text-zinc-400 hover:bg-zinc-700" : "bg-zinc-800/50 text-zinc-600 cursor-default"
+                        }`}
+                      >
+                        {toggling === stageKey ? <Loader2 className="w-3 h-3 animate-spin" /> : "台"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Empty state */}
       {data.dates.length === 0 && (
         <div className="text-center py-16 text-zinc-600">
           <Calendar className="w-12 h-12 mx-auto mb-3 opacity-30" />
