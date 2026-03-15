@@ -77,12 +77,33 @@ export default function Sidebar() {
 
   return (
     <>
-      <button 
-        onClick={() => setOpen(true)} 
-        className="fixed top-4 left-4 z-50 p-2.5 bg-zinc-900 border border-zinc-700 rounded-xl md:hidden shadow-lg"
-      >
-        <Menu className="w-6 h-6" />
-      </button>
+      {/* Mobile top bar */}
+      <div className="fixed top-0 left-0 right-0 z-40 md:hidden bg-zinc-950 border-b border-zinc-800/50 px-4 py-3 flex items-center justify-between">
+        <button 
+          onClick={() => setOpen(true)} 
+          className="p-2 bg-zinc-900 border border-zinc-700 rounded-xl shadow-lg"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+        <span className="text-sm font-bold text-blue-400">音控排班</span>
+        {isLoggedIn ? (
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1 px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-xl text-xs text-zinc-400"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            {role === "admin" ? "管理員" : "排班人"}
+          </button>
+        ) : (
+          <button
+            onClick={() => { setOpen(true); setShowPinInput(true); }}
+            className="flex items-center gap-1 px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-xl text-xs text-zinc-400"
+          >
+            <Lock className="w-3.5 h-3.5" />
+            登入
+          </button>
+        )}
+      </div>
 
       {open && (
         <div 
