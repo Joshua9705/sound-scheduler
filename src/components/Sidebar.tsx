@@ -21,7 +21,7 @@ import { useAuth } from "@/lib/auth";
 type MinRole = "admin" | "scheduler" | "visitor";
 
 const allMenuItems: { name: string; href: string; icon: any; minRole: MinRole }[] = [
-  { name: "儀表板", href: "/", icon: LayoutDashboard, minRole: "admin" },
+  { name: "儀表板", href: "/dashboard", icon: LayoutDashboard, minRole: "admin" },
   { name: "人員管理", href: "/members", icon: Users, minRole: "admin" },
   { name: "週四報名", href: "/thursday", icon: ClipboardCheck, minRole: "visitor" },
   { name: "產出班表", href: "/generate", icon: CalendarPlus, minRole: "admin" },
