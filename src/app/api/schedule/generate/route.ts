@@ -63,7 +63,7 @@ export async function POST(request: Request) {
   }
 
   // Load all data
-  const [membersRes, slotsRes, rolesRes, memberSlotsRes, memberRolesRes, slotReqsRes, configRes, thursdaySignupsRes, exclusionPairsRes] = await Promise.all([
+  const [membersRes, slotsRes, rolesRes, memberSlotsRes, memberRolesRes, slotReqsRes, configRes, thursdaySignupsRes, exclusionPairsRes, requiredPairsRes] = await Promise.all([
     db.execute("SELECT * FROM members WHERE active = 1"),
     db.execute("SELECT * FROM time_slots"),
     db.execute("SELECT * FROM roles"),
@@ -73,6 +73,7 @@ export async function POST(request: Request) {
     db.execute("SELECT * FROM configurations"),
     db.execute("SELECT * FROM thursday_signups ORDER BY date, role_id, created_at"),
     db.execute("SELECT * FROM exclusion_pairs"),
+    db.execute("SELECT * FROM required_pairs"),
   ]);
 
   const config: Record<string, string> = {};
@@ -108,6 +109,17 @@ export async function POST(request: Request) {
         (p.a === memberId && sessionMemberIds.includes(p.b)) ||
         (p.b === memberId && sessionMemberIds.includes(p.a))
     );
+  };
+
+  // Build required pairs: when member_id is scheduled, partner_id must also be in the same session
+  const requiredPairs: { memberId: number; partnerId: number }[] = requiredPairsRes.rows.map((r: any) => ({
+    memberId: Number(r.member_id),
+    partnerId: Number(r.partner_id),
+  }));
+
+  // Get required partner(s) for a member
+  const getRequiredPartners = (memberId: number): number[] => {
+    return requiredPairs.filter((p) => p.memberId === memberId).map((p) => p.partnerId);
   };
 
   const slots = slotsRes.rows.map((r: any) => ({
@@ -249,7 +261,15 @@ export async function POST(request: Request) {
             .filter((m) => !sessionAssignments.some((a) => a.memberId === m.id))
             .filter((m) => m.roles.some((r) => r.roleId === req.roleId))
             .filter((m) => isWithinLimit(m))
-            .filter((m) => !isExcluded(m.id, sessionAssignments.map((a) => a.memberId)));
+            .filter((m) => !isExcluded(m.id, sessionAssignments.map((a) => a.memberId)))
+            .filter((m) => {
+              // Check required pairs: if this member requires a partner, partner must be in session or assignable
+              const partners = getRequiredPartners(m.id);
+              if (partners.length === 0) return true;
+              const sessionMemberIds = sessionAssignments.map((a) => a.memberId);
+              const assignedOnDate = [...assignedThisDate, ...sessionMemberIds];
+              return partners.every((pid) => sessionMemberIds.includes(pid) || (!assignedOnDate.includes(pid) && members.find((mm) => mm.id === pid)));
+            });
 
           // Sort: prefer preferred slot members first, then least assigned, then by level
           regularCandidates.sort((a, b) => {
@@ -426,6 +446,13 @@ export async function POST(request: Request) {
                 .filter((a) => a.date === date && a.slotId === slot.id)
                 .map((a) => a.memberId);
               if (isExcluded(member.id, sessionMemberIds)) continue;
+
+              // Check required pairs
+              const requiredPartners = getRequiredPartners(member.id);
+              if (requiredPartners.length > 0) {
+                const allMet = requiredPartners.every((pid) => sessionMemberIds.includes(pid));
+                if (!allMet) continue;
+              }
 
               const needsPairing = member.level >= 3 || memberRole.isLearning;
               if (needsPairing) {
