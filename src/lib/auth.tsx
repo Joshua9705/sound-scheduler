@@ -2,10 +2,11 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 
-type Role = "admin" | "visitor";
+export type Role = "admin" | "scheduler" | "visitor";
 
 interface AuthContextType {
   isAdmin: boolean;
+  isScheduler: boolean;  // scheduler OR admin
   role: Role;
   login: (pin: string) => Promise<boolean>;
   logout: () => void;
@@ -13,6 +14,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({
   isAdmin: false,
+  isScheduler: false,
   role: "visitor",
   login: async () => false,
   logout: () => {},
@@ -22,12 +24,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<Role>("visitor");
 
   useEffect(() => {
-    const savedRole = localStorage.getItem("scheduler_role");
+    const savedRole = localStorage.getItem("scheduler_role") as Role | null;
     const expiry = localStorage.getItem("scheduler_expiry");
-    if (savedRole === "admin" && expiry && Date.now() < parseInt(expiry)) {
-      setRole("admin");
+    if (savedRole && (savedRole === "admin" || savedRole === "scheduler") && expiry && Date.now() < parseInt(expiry)) {
+      setRole(savedRole);
     } else {
-      // Clear expired session
       if (savedRole) {
         localStorage.removeItem("scheduler_role");
         localStorage.removeItem("scheduler_expiry");
@@ -43,10 +44,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ pin }),
     });
     if (res.ok) {
+      const data = await res.json();
+      const returnedRole = data.role as Role;
       const expiry = Date.now() + 24 * 60 * 60 * 1000;
-      localStorage.setItem("scheduler_role", "admin");
+      localStorage.setItem("scheduler_role", returnedRole);
       localStorage.setItem("scheduler_expiry", String(expiry));
-      setRole("admin");
+      setRole(returnedRole);
       return true;
     }
     return false;
@@ -58,8 +61,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRole("visitor");
   };
 
+  const isAdmin = role === "admin";
+  const isScheduler = role === "admin" || role === "scheduler";
+
   return (
-    <AuthContext.Provider value={{ isAdmin: role === "admin", role, login, logout }}>
+    <AuthContext.Provider value={{ isAdmin, isScheduler, role, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -24,7 +24,7 @@ const SLOT_ORDER = [
 ];
 
 export default function SchedulePage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isScheduler } = useAuth();
   const currentYear = new Date().getFullYear();
   const currentQ = Math.ceil((new Date().getMonth() + 1) / 3);
 
@@ -188,7 +188,7 @@ export default function SchedulePage() {
                                     <span className={`px-2 py-0.5 rounded text-xs border ${roleColor(a.role_name)}`}>
                                       {a.role_name}
                                     </span>
-                                    {isAdmin ? (
+                                    {isScheduler ? (
                                       <select
                                         value={a.member_id}
                                         onChange={(e) => handleSwap(a.id, Number(e.target.value))}
@@ -203,7 +203,7 @@ export default function SchedulePage() {
                                     )}
                                   </div>
                                 ))}
-                                {isAdmin && warnings.map((w, i) => (
+                                {isScheduler && warnings.map((w, i) => (
                                   <div key={i} className="flex items-center gap-1 text-amber-500 text-xs">
                                     <AlertTriangle className="w-3 h-3" />
                                     {w}

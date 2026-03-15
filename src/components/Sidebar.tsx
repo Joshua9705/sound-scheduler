@@ -18,31 +18,37 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
-const adminMenuItems = [
-  { name: "儀表板", href: "/", icon: LayoutDashboard },
-  { name: "人員管理", href: "/members", icon: Users },
-  { name: "週四報名", href: "/thursday", icon: ClipboardCheck },
-  { name: "產出班表", href: "/generate", icon: CalendarPlus },
-  { name: "查看班表", href: "/schedule", icon: CalendarDays },
+const allMenuItems = [
+  { name: "儀表板", href: "/", icon: LayoutDashboard, minRole: "admin" as const },
+  { name: "人員管理", href: "/members", icon: Users, minRole: "admin" as const },
+  { name: "週四報名", href: "/thursday", icon: ClipboardCheck, minRole: "visitor" as const },
+  { name: "產出班表", href: "/generate", icon: CalendarPlus, minRole: "scheduler" as const },
+  { name: "查看班表", href: "/schedule", icon: CalendarDays, minRole: "visitor" as const },
 ];
 
-const visitorMenuItems = [
-  { name: "週四報名", href: "/thursday", icon: ClipboardCheck },
-  { name: "查看班表", href: "/schedule", icon: CalendarDays },
-];
+const roleLabels = {
+  admin: "🔓 管理員",
+  scheduler: "🔓 排班人",
+  visitor: "",
+};
 
 export default function Sidebar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
-  const { isAdmin, login, logout } = useAuth();
+  const { isAdmin, isScheduler, role, login, logout } = useAuth();
 
-  // Inline PIN login state
   const [showPinInput, setShowPinInput] = useState(false);
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
 
-  const menuItems = isAdmin ? adminMenuItems : visitorMenuItems;
+  // Filter menu items based on role
+  const menuItems = allMenuItems.filter((item) => {
+    if (item.minRole === "visitor") return true;
+    if (item.minRole === "scheduler") return isScheduler;
+    if (item.minRole === "admin") return isAdmin;
+    return false;
+  });
 
   const handleLogin = async () => {
     setPinError("");
@@ -65,9 +71,10 @@ export default function Sidebar() {
     setPinError("");
   };
 
+  const isLoggedIn = role === "admin" || role === "scheduler";
+
   return (
     <>
-      {/* Mobile hamburger */}
       <button 
         onClick={() => setOpen(true)} 
         className="fixed top-4 left-4 z-50 p-2.5 bg-zinc-900 border border-zinc-700 rounded-xl md:hidden shadow-lg"
@@ -75,7 +82,6 @@ export default function Sidebar() {
         <Menu className="w-6 h-6" />
       </button>
 
-      {/* Overlay */}
       {open && (
         <div 
           className="fixed inset-0 bg-black/60 z-40 md:hidden backdrop-blur-sm" 
@@ -83,14 +89,12 @@ export default function Sidebar() {
         />
       )}
 
-      {/* Sidebar */}
       <aside className={`
         fixed left-0 top-0 h-screen w-72 bg-zinc-950 border-r border-zinc-800/50 p-5 z-50
         transition-transform duration-300 ease-in-out flex flex-col
         ${open ? "translate-x-0" : "-translate-x-full"}
         md:translate-x-0
       `}>
-        {/* Close button (mobile) */}
         <button 
           onClick={() => setOpen(false)} 
           className="absolute top-4 right-4 p-1.5 text-zinc-500 hover:text-white md:hidden"
@@ -129,13 +133,12 @@ export default function Sidebar() {
           })}
         </nav>
         
-        {/* Auth section at bottom */}
         <div className="mt-4 space-y-2">
-          {isAdmin ? (
+          {isLoggedIn ? (
             <div className="p-4 bg-zinc-900/50 rounded-xl border border-zinc-800/30">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-amber-400 font-medium flex items-center gap-1.5">
-                  🔓 管理員
+                <span className={`text-sm font-medium flex items-center gap-1.5 ${role === "admin" ? "text-amber-400" : "text-blue-400"}`}>
+                  {roleLabels[role]}
                 </span>
                 <button
                   onClick={handleLogout}
@@ -148,7 +151,7 @@ export default function Sidebar() {
             </div>
           ) : showPinInput ? (
             <div className="p-4 bg-zinc-900/50 rounded-xl border border-zinc-800/30 space-y-2">
-              <p className="text-xs text-zinc-500">輸入管理員密碼</p>
+              <p className="text-xs text-zinc-500">輸入密碼</p>
               <input
                 type="password"
                 value={pin}
@@ -181,7 +184,7 @@ export default function Sidebar() {
               className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-zinc-900/50 hover:bg-zinc-800/60 rounded-xl border border-zinc-800/30 text-zinc-500 hover:text-zinc-300 text-sm transition-colors"
             >
               <Lock className="w-4 h-4" />
-              🔑 管理員登入
+              🔑 登入
             </button>
           )}
 

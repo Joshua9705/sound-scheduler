@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CalendarPlus, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
-import AdminGuard from "@/components/AdminGuard";
+import SchedulerGuard from "@/components/SchedulerGuard";
 
 export default function GeneratePage() {
   const currentYear = new Date().getFullYear();
@@ -55,7 +55,7 @@ export default function GeneratePage() {
   }
 
   return (
-    <AdminGuard>
+    <SchedulerGuard>
     <div className="space-y-8 animate-in fade-in duration-500">
       <header>
         <h2 className="text-3xl font-bold tracking-tight">產出季度班表</h2>
@@ -167,6 +167,6 @@ export default function GeneratePage() {
         </div>
       )}
     </div>
-    </AdminGuard>
+    </SchedulerGuard>
   );
 }
