@@ -254,8 +254,9 @@ export async function POST(request: Request) {
         for (const req of reqs) {
           if (req.minCount === 0 && req.maxCount === 0) continue;
 
-          // Find all eligible candidates (including fallback/聚會管理人)
+          // Find non-fallback regular candidates first
           const regularCandidates = eligibleForSlot
+            .filter((m) => !m.isFallback)
             .filter((m) => !assignedThisDate.has(m.id))
             .filter((m) => !sessionAssignments.some((a) => a.memberId === m.id))
             .filter((m) => m.roles.some((r) => r.roleId === req.roleId))
@@ -270,13 +271,8 @@ export async function POST(request: Request) {
               return partners.every((pid) => sessionMemberIds.includes(pid) || (!assignedOnDate.includes(pid) && members.find((mm) => mm.id === pid)));
             });
 
-          // Sort: prefer non-fallback first (regular members get priority),
-          // then preferred slot, then least assigned, then by level
+          // Sort: prefer preferred slot, then least assigned, then by level
           regularCandidates.sort((a, b) => {
-            // Fallback members sort last (regular members fill first)
-            const aFb = a.isFallback ? 1 : 0;
-            const bFb = b.isFallback ? 1 : 0;
-            if (aFb !== bFb) return aFb - bFb;
             // Preferred slot priority
             const aPref = a.preferredSlotId === slot.id ? 0 : 1;
             const bPref = b.preferredSlotId === slot.id ? 0 : 1;
@@ -346,6 +342,28 @@ export async function POST(request: Request) {
                 });
                 filled++;
               }
+            }
+          }
+
+          // Last resort: use 聚會管理人 (fallback) to fill remaining spots
+          if (filled < needed) {
+            const fallbackCandidates = eligibleForSlot
+              .filter((m) => m.isFallback)
+              .filter((m) => !assignedThisDate.has(m.id))
+              .filter((m) => !sessionAssignments.some((a) => a.memberId === m.id))
+              .filter((m) => m.roles.some((r) => r.roleId === req.roleId))
+              .filter((m) => !isExcluded(m.id, sessionAssignments.map((a) => a.memberId)));
+
+            for (const fb of fallbackCandidates) {
+              if (filled >= needed) break;
+              sessionAssignments.push({
+                date,
+                slotId: slot.id,
+                roleId: req.roleId,
+                memberId: fb.id,
+              });
+              filled++;
+              if (fb.level <= 2) hasHighLevel = true;
             }
           }
 
