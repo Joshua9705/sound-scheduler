@@ -10,12 +10,14 @@ import {
   CalendarDays,
   Menu,
   X,
-  Headphones
+  Headphones,
+  ClipboardCheck
 } from "lucide-react";
 
 const menuItems = [
   { name: "儀表板", href: "/", icon: LayoutDashboard },
   { name: "人員管理", href: "/members", icon: Users },
+  { name: "週四報名", href: "/thursday", icon: ClipboardCheck },
   { name: "產出班表", href: "/generate", icon: CalendarPlus },
   { name: "查看班表", href: "/schedule", icon: CalendarDays },
 ];

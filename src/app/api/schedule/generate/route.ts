@@ -63,7 +63,7 @@ export async function POST(request: Request) {
   }
 
   // Load all data
-  const [membersRes, slotsRes, rolesRes, memberSlotsRes, memberRolesRes, slotReqsRes, configRes] = await Promise.all([
+  const [membersRes, slotsRes, rolesRes, memberSlotsRes, memberRolesRes, slotReqsRes, configRes, thursdaySignupsRes] = await Promise.all([
     db.execute("SELECT * FROM members WHERE active = 1"),
     db.execute("SELECT * FROM time_slots"),
     db.execute("SELECT * FROM roles"),
@@ -71,6 +71,7 @@ export async function POST(request: Request) {
     db.execute("SELECT * FROM member_roles"),
     db.execute("SELECT * FROM slot_role_requirements"),
     db.execute("SELECT * FROM configurations"),
+    db.execute("SELECT * FROM thursday_signups ORDER BY date, role_id, created_at"),
   ]);
 
   const config: Record<string, string> = {};
@@ -136,6 +137,68 @@ export async function POST(request: Request) {
       const reqs = slotReqs.filter((sr) => sr.slotId === slot.id);
 
       for (const date of dates) {
+        // ── Thursday (slot_id=1): use signup-based scheduling ──
+        if (slot.id === 1) {
+          const sessionAssignments: Assignment[] = [];
+
+          // For each role requirement on Thursday
+          for (const req of reqs) {
+            if (req.minCount === 0 && req.maxCount === 0) continue;
+
+            // Get signups for this date and role
+            const signupsForDateRole = thursdaySignupsRes.rows
+              .filter((r: any) => String(r.date) === date && Number(r.role_id) === req.roleId)
+              .map((r: any) => Number(r.member_id));
+
+            if (signupsForDateRole.length > 0) {
+              // Load-balance: pick the one with least assignments this month
+              const ranked = signupsForDateRole
+                .map((mid: number) => {
+                  const count = Object.entries(monthlySlotCount[monthKey] || {})
+                    .filter(([k]) => k.startsWith(`${mid}:`))
+                    .reduce((sum, [, v]) => sum + (v as number), 0);
+                  return { mid, count };
+                })
+                .sort((a: { mid: number; count: number }, b: { mid: number; count: number }) => a.count - b.count);
+
+              // Assign up to minCount (for PA min=1)
+              for (let i = 0; i < Math.min(req.minCount, ranked.length); i++) {
+                sessionAssignments.push({
+                  date,
+                  slotId: slot.id,
+                  roleId: req.roleId,
+                  memberId: ranked[i].mid,
+                });
+              }
+            } else if (req.minCount > 0) {
+              // No signups: for PA (role_id=1), use fallback member
+              if (req.roleId === 1) {
+                const fallback = members.find((m) => m.isFallback);
+                if (fallback) {
+                  sessionAssignments.push({
+                    date,
+                    slotId: slot.id,
+                    roleId: req.roleId,
+                    memberId: fallback.id,
+                  });
+                } else {
+                  warnings.push(`⚠️ ${date} 週四晚上 — PA 無人報名且找不到 fallback 成員`);
+                }
+              }
+              // Stage (role_id=2) min=0, skip if no signups
+            }
+          }
+
+          // Update monthly counts and add assignments
+          for (const a of sessionAssignments) {
+            const key = `${a.memberId}:${a.slotId}`;
+            monthlySlotCount[monthKey][key] = (monthlySlotCount[monthKey][key] || 0) + 1;
+            allAssignments.push(a);
+          }
+
+          continue; // skip normal scheduling for Thursday
+        }
+
         // Track who is already assigned this date (across all slots on this date)
         const assignedThisDate = new Set<number>();
         for (const a of allAssignments) {
@@ -144,8 +207,6 @@ export async function POST(request: Request) {
 
         // Get eligible members for this slot
         const eligibleForSlot = members.filter((m) => {
-          // Thursday (slot 1): all members can participate
-          if (slot.id === 1) return true;
           return m.slotIds.includes(slot.id);
         });
 
