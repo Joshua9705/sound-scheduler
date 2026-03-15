@@ -46,10 +46,13 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   const body = await request.json();
-  const { id, name, level, active, slot_ids, roles } = body;
+  const { id, name, level, active, slot_ids, roles, max_override, is_fallback, preferred_slot_id } = body;
 
   const stmts: any[] = [
-    { sql: "UPDATE members SET name = ?, level = ?, active = ? WHERE id = ?", args: [name, level, active ? 1 : 0, id] },
+    {
+      sql: "UPDATE members SET name = ?, level = ?, active = ?, max_override = ?, is_fallback = ?, preferred_slot_id = ? WHERE id = ?",
+      args: [name, level, active ? 1 : 0, max_override ?? null, is_fallback ? 1 : 0, preferred_slot_id ?? null, id],
+    },
     { sql: "DELETE FROM member_slots WHERE member_id = ?", args: [id] },
     { sql: "DELETE FROM member_roles WHERE member_id = ?", args: [id] },
   ];

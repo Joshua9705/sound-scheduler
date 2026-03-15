@@ -16,7 +16,6 @@ function getDatesForDayInMonth(year: number, month: number, dayOfWeek: number): 
 
 // Helper: count weeks in a month
 function weeksInMonth(year: number, month: number): number {
-  // Count Sundays as week marker
   const sundays = getDatesForDayInMonth(year, month, 0);
   return sundays.length >= 5 ? 5 : 4;
 }
@@ -40,6 +39,9 @@ interface Member {
   level: number;
   slotIds: number[];
   roles: { roleId: number; isLearning: boolean }[];
+  maxOverride: number | null;
+  isFallback: boolean;
+  preferredSlotId: number | null;
 }
 
 interface SlotReq {
@@ -87,6 +89,9 @@ export async function POST(request: Request) {
     roles: memberRolesRes.rows
       .filter((mr: any) => Number(mr.member_id) === Number(r.id))
       .map((mr: any) => ({ roleId: Number(mr.role_id), isLearning: Number(mr.is_learning) === 1 })),
+    maxOverride: r.max_override !== null && r.max_override !== undefined ? Number(r.max_override) : null,
+    isFallback: Number(r.is_fallback) === 1,
+    preferredSlotId: r.preferred_slot_id !== null && r.preferred_slot_id !== undefined ? Number(r.preferred_slot_id) : null,
   }));
 
   const slots = slotsRes.rows.map((r: any) => ({
@@ -115,14 +120,16 @@ export async function POST(request: Request) {
   }
   const allAssignments: Assignment[] = [];
 
-  // Track monthly assignment counts per member: { "2026-04": { memberId: count } }
-  const monthlyCount: Record<string, Record<number, number>> = {};
+  // Track monthly assignment counts per member per slot: { "2026-04": { "memberId:slotId": count } }
+  // Per-slot monthly limit: max_monthly_4week/5week applies per time_slot per member.
+  // A member with 2 slots can serve up to 2×max times/month.
+  const monthlySlotCount: Record<string, Record<string, number>> = {};
 
   for (const { year, month } of months) {
     const monthKey = `${year}-${String(month).padStart(2, "0")}`;
     const weeks = weeksInMonth(year, month);
-    const maxPerMonth = weeks >= 5 ? max5week : max4week;
-    monthlyCount[monthKey] = {};
+    const maxPerSlotPerMonth = weeks >= 5 ? max5week : max4week;
+    monthlySlotCount[monthKey] = {};
 
     for (const slot of slots) {
       const dates = getDatesForDayInMonth(year, month, slot.dayOfWeek);
@@ -136,53 +143,64 @@ export async function POST(request: Request) {
         }
 
         // Get eligible members for this slot
-        const eligibleForSlot = members.filter(
-          (m) => m.slotIds.includes(slot.id) || m.slotIds.includes(1) // slot 1 = Thursday (all members can do Thursday per spec... actually check: "週四全部人都可以填寫報名")
-        ).filter((m) => {
-          // Actually re-check: for Thursday (slot 1), all members can participate
+        const eligibleForSlot = members.filter((m) => {
+          // Thursday (slot 1): all members can participate
           if (slot.id === 1) return true;
           return m.slotIds.includes(slot.id);
         });
 
         const sessionAssignments: Assignment[] = [];
-        let hasHighLevel = false; // Track if level 1-2 is in this session
+        let hasHighLevel = false;
+
+        // Helper to check if member has hit the per-slot monthly limit
+        const isWithinLimit = (member: Member): boolean => {
+          if (member.isFallback) return true; // fallback members bypass normal limits
+          const globalMax = maxPerSlotPerMonth;
+          const memberMax = member.maxOverride !== null ? member.maxOverride : globalMax;
+          const key = `${member.id}:${slot.id}`;
+          const count = monthlySlotCount[monthKey][key] || 0;
+          return count < memberMax;
+        };
 
         // For each required role
         for (const req of reqs) {
           if (req.minCount === 0 && req.maxCount === 0) continue;
 
-          // Find members who can fill this role in this slot
-          const candidates = eligibleForSlot
-            .filter((m) => !assignedThisDate.has(m.id)) // not already assigned today
-            .filter((m) => !sessionAssignments.some((a) => a.memberId === m.id)) // not in this session
-            .filter((m) => m.roles.some((r) => r.roleId === req.roleId)) // can do this role
-            .filter((m) => {
-              // Check monthly limit
-              const count = monthlyCount[monthKey][m.id] || 0;
-              return count < maxPerMonth;
-            });
+          // Find non-fallback regular candidates
+          const regularCandidates = eligibleForSlot
+            .filter((m) => !m.isFallback)
+            .filter((m) => !assignedThisDate.has(m.id))
+            .filter((m) => !sessionAssignments.some((a) => a.memberId === m.id))
+            .filter((m) => m.roles.some((r) => r.roleId === req.roleId))
+            .filter((m) => isWithinLimit(m));
 
-          // Sort: prefer least assigned this month, then by level (prefer higher level = lower number)
-          candidates.sort((a, b) => {
-            const aCount = monthlyCount[monthKey][a.id] || 0;
-            const bCount = monthlyCount[monthKey][b.id] || 0;
+          // Sort: prefer preferred slot members first, then least assigned, then by level
+          regularCandidates.sort((a, b) => {
+            // Preferred slot priority
+            const aPref = a.preferredSlotId === slot.id ? 0 : 1;
+            const bPref = b.preferredSlotId === slot.id ? 0 : 1;
+            if (aPref !== bPref) return aPref - bPref;
+            // Least assigned this month (across all slots)
+            const aCount = Object.entries(monthlySlotCount[monthKey])
+              .filter(([k]) => k.startsWith(`${a.id}:`))
+              .reduce((sum, [, v]) => sum + v, 0);
+            const bCount = Object.entries(monthlySlotCount[monthKey])
+              .filter(([k]) => k.startsWith(`${b.id}:`))
+              .reduce((sum, [, v]) => sum + v, 0);
             if (aCount !== bCount) return aCount - bCount;
             return a.level - b.level; // prefer higher level (1 > 2 > 3 > 4)
           });
 
-          // For min_count roles, we must fill them
           const needed = req.minCount;
           let filled = 0;
 
-          for (const candidate of candidates) {
+          for (const candidate of regularCandidates) {
             if (filled >= needed) break;
 
-            // If candidate is level 3-4 or learning this role, check pairing
             const roleInfo = candidate.roles.find((r) => r.roleId === req.roleId);
             const needsPairing = candidate.level >= 3 || (roleInfo?.isLearning ?? false);
 
             if (needsPairing && !hasHighLevel) {
-              // Skip for now, try to assign level 1-2 first
               continue;
             }
 
@@ -196,10 +214,9 @@ export async function POST(request: Request) {
             if (candidate.level <= 2) hasHighLevel = true;
           }
 
-          // If we couldn't fill because we need level 1-2 first, retry with level 1-2
+          // Retry: find level 1-2 first if still unfilled
           if (filled < needed) {
-            // Find level 1-2 candidates first
-            const highLevelCandidates = candidates.filter(
+            const highLevelCandidates = regularCandidates.filter(
               (m) => m.level <= 2 && !sessionAssignments.some((a) => a.memberId === m.id)
             );
             for (const hc of highLevelCandidates) {
@@ -214,9 +231,8 @@ export async function POST(request: Request) {
               hasHighLevel = true;
             }
 
-            // Now retry low-level candidates
             if (hasHighLevel && filled < needed) {
-              const lowLevelCandidates = candidates.filter(
+              const lowLevelCandidates = regularCandidates.filter(
                 (m) => m.level >= 3 && !sessionAssignments.some((a) => a.memberId === m.id)
               );
               for (const lc of lowLevelCandidates) {
@@ -232,14 +248,39 @@ export async function POST(request: Request) {
             }
           }
 
+          // If still unfilled and slot is required, use fallback member
+          if (filled < needed) {
+            const fallbackMembers = eligibleForSlot.filter(
+              (m) =>
+                m.isFallback &&
+                !assignedThisDate.has(m.id) &&
+                !sessionAssignments.some((a) => a.memberId === m.id) &&
+                m.roles.some((r) => r.roleId === req.roleId)
+            );
+
+            for (const fb of fallbackMembers) {
+              if (filled >= needed) break;
+              sessionAssignments.push({
+                date,
+                slotId: slot.id,
+                roleId: req.roleId,
+                memberId: fb.id,
+              });
+              filled++;
+              if (fb.level <= 2) hasHighLevel = true;
+            }
+          }
+
           if (filled < needed) {
             if (slot.required) {
-              warnings.push(`⚠️ ${date} ${slot.name} — ${rolesRes.rows.find((r: any) => Number(r.id) === req.roleId)?.name} 人力不足（需 ${needed}，僅排 ${filled}）`);
+              warnings.push(
+                `⚠️ ${date} ${slot.name} — ${rolesRes.rows.find((r: any) => Number(r.id) === req.roleId)?.name} 人力不足（需 ${needed}，僅排 ${filled}）`
+              );
             }
           }
         }
 
-        // Validate: if session has level 3-4 members, must have level 1-2
+        // Validate: level 3-4 members should have level 1-2 pairing
         const sessionMembers = sessionAssignments.map((a) => members.find((m) => m.id === a.memberId)!);
         const hasLow = sessionMembers.some((m) => m.level >= 3);
         const hasHigh = sessionMembers.some((m) => m.level <= 2);
@@ -247,14 +288,14 @@ export async function POST(request: Request) {
           warnings.push(`⚠️ ${date} ${slot.name} — 等級 3-4 的成員沒有等級 1-2 搭配`);
         }
 
-        // If Thursday and no assignments, that's ok (can be empty)
         if (!slot.required && sessionAssignments.length === 0) {
           continue;
         }
 
-        // Update counts and add to all assignments
+        // Update per-slot counts and add to all assignments
         for (const a of sessionAssignments) {
-          monthlyCount[monthKey][a.memberId] = (monthlyCount[monthKey][a.memberId] || 0) + 1;
+          const key = `${a.memberId}:${a.slotId}`;
+          monthlySlotCount[monthKey][key] = (monthlySlotCount[monthKey][key] || 0) + 1;
           assignedThisDate.add(a.memberId);
           allAssignments.push(a);
         }
@@ -279,12 +320,22 @@ export async function POST(request: Request) {
     );
   }
 
+  // Build summary using per-slot counts
+  const memberTotalCounts: Record<string, Record<number, number>> = {};
+  for (const [monthKey, slotCounts] of Object.entries(monthlySlotCount)) {
+    memberTotalCounts[monthKey] = {};
+    for (const [key, count] of Object.entries(slotCounts)) {
+      const memberId = Number(key.split(":")[0]);
+      memberTotalCounts[monthKey][memberId] = (memberTotalCounts[monthKey][memberId] || 0) + count;
+    }
+  }
+
   return NextResponse.json({
     scheduleId,
     quarter,
     totalAssignments: allAssignments.length,
     warnings,
-    monthSummary: Object.entries(monthlyCount).map(([month, counts]) => ({
+    monthSummary: Object.entries(memberTotalCounts).map(([month, counts]) => ({
       month,
       members: Object.entries(counts)
         .map(([mid, count]) => ({
