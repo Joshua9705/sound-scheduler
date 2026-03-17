@@ -10,6 +10,8 @@ import {
   X,
   Save,
   Loader2,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import AdminGuard from "@/components/AdminGuard";
 
@@ -27,6 +29,7 @@ interface Slot {
 interface MemberRole {
   role_id: number;
   is_learning: boolean;
+  priority?: number;
 }
 
 interface Member {
@@ -57,7 +60,7 @@ function parseSlotIds(slot_ids: string | null): number[] {
     .filter((n) => !isNaN(n));
 }
 
-function parseRoleInfo(role_info: string | null): { roleId: number; name: string; isLearning: boolean }[] {
+function parseRoleInfo(role_info: string | null): { roleId: number; name: string; isLearning: boolean; priority: number }[] {
   if (!role_info) return [];
   return role_info
     .split(",")
@@ -68,9 +71,11 @@ function parseRoleInfo(role_info: string | null): { roleId: number; name: string
         roleId: parseInt(parts[0]),
         name: parts[1],
         isLearning: parts[2] === "1",
+        priority: parts[3] ? parseInt(parts[3]) : 0,
       };
     })
-    .filter(Boolean) as { roleId: number; name: string; isLearning: boolean }[];
+    .filter(Boolean)
+    .sort((a, b) => (a!.priority || 99) - (b!.priority || 99)) as { roleId: number; name: string; isLearning: boolean; priority: number }[];
 }
 
 interface EditState {
@@ -137,6 +142,7 @@ export default function MembersPage() {
       roles: parseRoleInfo(member.role_info).map((r) => ({
         role_id: r.roleId,
         is_learning: r.isLearning,
+        priority: r.priority,
       })),
       max_override: member.max_override ?? null,
       is_fallback: member.is_fallback === 1 || (member.is_fallback as any) === true,
@@ -163,7 +169,7 @@ export default function MembersPage() {
         level: editState.level,
         active: editState.active,
         slot_ids: editState.slot_ids,
-        roles: editState.roles,
+        roles: editState.roles.map((r, i) => ({ ...r, priority: i + 1 })),
         max_override: editState.max_override,
         is_fallback: editState.is_fallback,
         preferred_slot_id: editState.preferred_slot_id,
@@ -211,10 +217,22 @@ export default function MembersPage() {
       if (existing) {
         return { ...prev, roles: prev.roles.filter((r) => r.role_id !== roleId) };
       } else {
-        return { ...prev, roles: [...prev.roles, { role_id: roleId, is_learning: false }] };
+        return { ...prev, roles: [...prev.roles, { role_id: roleId, is_learning: false, priority: prev.roles.length + 1 }] };
       }
     });
   }
+
+  function moveRoleInList(index: number, direction: -1 | 1) {
+    setEditState((prev) => {
+      const newIndex = index + direction;
+      if (newIndex < 0 || newIndex >= prev.roles.length) return prev;
+      const newRoles = [...prev.roles];
+      [newRoles[index], newRoles[newIndex]] = [newRoles[newIndex], newRoles[index]];
+      return { ...prev, roles: newRoles };
+    });
+  }
+
+  const circledNums = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
 
   function toggleLearning(roleId: number) {
     setEditState((prev) => ({
@@ -343,6 +361,43 @@ export default function MembersPage() {
           })}
         </div>
       </div>
+
+      {/* Role priority ordering */}
+      {editState.roles.length > 1 && (
+        <div>
+          <label className="block text-xs text-zinc-400 mb-2">角色偏好順序（上方 = 優先）</label>
+          <div className="space-y-1.5">
+            {editState.roles.map((r, i) => {
+              const roleName = roles.find((role) => role.id === r.role_id)?.name || `角色${r.role_id}`;
+              return (
+                <div key={r.role_id} className="flex items-center gap-2 bg-zinc-800/60 rounded-lg px-3 py-2">
+                  <span className="text-blue-400 font-bold text-sm w-5">{circledNums[i] || `${i+1}.`}</span>
+                  <span className="text-sm text-zinc-200 flex-1">
+                    {roleName}
+                    {r.is_learning && <span className="text-purple-400 text-xs ml-1">(學)</span>}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => moveRoleInList(i, -1)}
+                    disabled={i === 0}
+                    className="p-1 text-zinc-500 hover:text-white disabled:opacity-20 transition-colors"
+                  >
+                    <ArrowUp size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveRoleInList(i, 1)}
+                    disabled={i === editState.roles.length - 1}
+                    className="p-1 text-zinc-500 hover:text-white disabled:opacity-20 transition-colors"
+                  >
+                    <ArrowDown size={14} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Scheduling rules */}
       <div className="border-t border-zinc-800 pt-4 space-y-4">
@@ -566,6 +621,7 @@ export default function MembersPage() {
                               : "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
                           }`}
                         >
+                          <span className="text-blue-400 font-bold mr-0.5">{circledNums[i] || `${i+1}.`}</span>
                           {r.name}
                           {r.isLearning && "(學)"}
                         </span>
@@ -672,6 +728,7 @@ export default function MembersPage() {
                                   : "bg-emerald-500/10 text-emerald-300 border-emerald-500/20"
                               }`}
                             >
+                              <span className="text-blue-400 font-bold mr-0.5">{circledNums[i] || `${i+1}.`}</span>
                               {r.name}
                               {r.isLearning && "(學)"}
                             </span>

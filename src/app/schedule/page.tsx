@@ -287,7 +287,7 @@ export default function SchedulePage() {
                   ))}
                 </select>
               ) : (
-                <span className={`text-sm font-medium ${levelColor(a.member_level)}`}>{a.member_name}</span>
+                <span className="text-sm font-medium text-zinc-200">{a.member_name}</span>
               )}
             </div>
           ))}
@@ -315,7 +315,7 @@ export default function SchedulePage() {
             ))}
           </select>
         ) : (
-          <span className="text-sm text-zinc-600 border border-dashed border-zinc-700 rounded px-2 py-0.5">未排</span>
+          <span className="text-sm text-zinc-600">—</span>
         )}
       </div>
     );
@@ -399,7 +399,7 @@ export default function SchedulePage() {
                                   />
                                 ))
                               )}
-                              {isScheduler && warnings.map((w, i) => (
+                              {(isAdmin || isScheduler) && warnings.map((w, i) => (
                                 <div key={i} className="flex items-center gap-1 text-amber-500 text-xs">
                                   <AlertTriangle className="w-3 h-3" />
                                   {w}

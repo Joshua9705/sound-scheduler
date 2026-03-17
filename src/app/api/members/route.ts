@@ -6,7 +6,7 @@ export async function GET() {
     SELECT m.*, 
            GROUP_CONCAT(DISTINCT ts.id) as slot_ids,
            GROUP_CONCAT(DISTINCT ts.name) as slot_names,
-           GROUP_CONCAT(DISTINCT r.id || ':' || r.name || ':' || mr.is_learning) as role_info
+           GROUP_CONCAT(DISTINCT r.id || ':' || r.name || ':' || mr.is_learning || ':' || COALESCE(mr.priority, 0)) as role_info
     FROM members m
     LEFT JOIN member_slots ms ON m.id = ms.member_id
     LEFT JOIN time_slots ts ON ms.slot_id = ts.id
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
   }
   if (roles?.length) {
     for (const r of roles) {
-      stmts.push({ sql: "INSERT INTO member_roles (member_id, role_id, is_learning) VALUES (?, ?, ?)", args: [memberId, r.role_id, r.is_learning ? 1 : 0] });
+      stmts.push({ sql: "INSERT INTO member_roles (member_id, role_id, is_learning, priority) VALUES (?, ?, ?, ?)", args: [memberId, r.role_id, r.is_learning ? 1 : 0, r.priority ?? (roles.indexOf(r) + 1)] });
     }
   }
   if (stmts.length) await db.batch(stmts, "write");
@@ -63,7 +63,7 @@ export async function PUT(request: Request) {
   }
   if (roles?.length) {
     for (const r of roles) {
-      stmts.push({ sql: "INSERT INTO member_roles (member_id, role_id, is_learning) VALUES (?, ?, ?)", args: [id, r.role_id, r.is_learning ? 1 : 0] });
+      stmts.push({ sql: "INSERT INTO member_roles (member_id, role_id, is_learning, priority) VALUES (?, ?, ?, ?)", args: [id, r.role_id, r.is_learning ? 1 : 0, r.priority ?? (roles.indexOf(r) + 1)] });
     }
   }
   await db.batch(stmts, "write");
