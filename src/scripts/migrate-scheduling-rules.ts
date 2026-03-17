@@ -38,19 +38,19 @@ async function migrate() {
   // Update specific members
   console.log("\n🔧 Updating specific member records...");
 
-  // Member id=1 (Member_A): Set is_fallback=1, max_override=NULL (no limit)
+  // Member id=1: Set is_fallback=1, max_override=NULL (no limit)
   await db.execute({
     sql: "UPDATE members SET is_fallback = 1, max_override = NULL WHERE id = 1",
     args: [],
   });
-  console.log("✅ Member id=1 (Member_A): set is_fallback=1, max_override=NULL");
+  console.log("✅ Member id=1 (member_1): set is_fallback=1, max_override=NULL");
 
-  // Member id=2 (Member_B): Set preferred_slot_id=3 (週日早上)
+  // Member id=2 (member_2): Set preferred_slot_id=3 (週日早上)
   await db.execute({
     sql: "UPDATE members SET preferred_slot_id = 3 WHERE id = 2",
     args: [],
   });
-  console.log("✅ Member id=2 (Member_B): set preferred_slot_id=3 (週日早上)");
+  console.log("✅ Member id=2 (member_2): set preferred_slot_id=3 (週日早上)");
 
   // Verify the changes
   const members = await db.execute(
