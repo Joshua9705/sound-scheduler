@@ -52,6 +52,7 @@ interface SlotReq {
 }
 
 export async function POST(request: Request) {
+  try {
   const body = await request.json();
   const { quarter } = body;
   if (!quarter) return NextResponse.json({ error: "Missing quarter" }, { status: 400 });
@@ -527,4 +528,8 @@ export async function POST(request: Request) {
         .sort((a, b) => b.count - a.count),
     })),
   });
+  } catch (error: any) {
+    console.error("Generate error:", error);
+    return NextResponse.json({ error: error?.message || "伺服器錯誤，請稍後再試" }, { status: 500 });
+  }
 }
