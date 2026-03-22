@@ -295,13 +295,6 @@ export async function POST(request: Request) {
           for (const candidate of regularCandidates) {
             if (filled >= needed) break;
 
-            const roleInfo = candidate.roles.find((r) => r.roleId === req.roleId);
-            const needsPairing = candidate.level >= 3 || (roleInfo?.isLearning ?? false);
-
-            if (needsPairing && !hasHighLevel) {
-              continue;
-            }
-
             sessionAssignments.push({
               date,
               slotId: slot.id,
@@ -452,17 +445,6 @@ export async function POST(request: Request) {
               if (requiredPartners.length > 0) {
                 const allMet = requiredPartners.every((pid) => sessionMemberIds.includes(pid));
                 if (!allMet) continue;
-              }
-
-              const needsPairing = member.level >= 3 || memberRole.isLearning;
-              if (needsPairing) {
-                const sessionHasHighLevel = allAssignments
-                  .filter((a) => a.date === date && a.slotId === slot.id)
-                  .some((a) => {
-                    const m = members.find((mm) => mm.id === a.memberId);
-                    return m && m.level <= 2;
-                  });
-                if (!sessionHasHighLevel) continue;
               }
 
               allAssignments.push({
