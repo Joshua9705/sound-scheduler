@@ -72,9 +72,17 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url);
+  const assignmentId = searchParams.get("assignment_id");
   const quarter = searchParams.get("quarter");
-  if (!quarter) return NextResponse.json({ error: "Missing quarter" }, { status: 400 });
 
+  // Delete a single assignment
+  if (assignmentId) {
+    await db.execute({ sql: "DELETE FROM assignments WHERE id = ?", args: [assignmentId] });
+    return NextResponse.json({ ok: true });
+  }
+
+  // Delete entire quarter schedule
+  if (!quarter) return NextResponse.json({ error: "Missing quarter or assignment_id" }, { status: 400 });
   const schedule = await db.execute({ sql: "SELECT id FROM schedules WHERE quarter = ?", args: [quarter] });
   if (schedule.rows.length) {
     await db.batch([

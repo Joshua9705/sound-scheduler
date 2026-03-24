@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, AlertTriangle, X } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
 interface Assignment {
@@ -178,6 +178,11 @@ export default function SchedulePage() {
     load();
   }
 
+  async function handleDelete(assignmentId: number) {
+    await fetch(`/api/schedule?assignment_id=${assignmentId}`, { method: "DELETE" });
+    load();
+  }
+
   // Check rule violations for a session
   function getWarnings(sessionAssignments: Assignment[]): string[] {
     const warnings: string[] = [];
@@ -303,15 +308,24 @@ export default function SchedulePage() {
                 {a.role_name}
               </span>
               {isSchedulerUser ? (
-                <select
-                  value={a.member_id}
-                  onChange={(e) => handleSwap(a.id, Number(e.target.value))}
-                  className={`bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-sm ${levelColor(a.member_level)} focus:border-blue-500 focus:outline-none`}
-                >
-                  {members.map((m: any) => (
-                    <option key={m.id} value={m.id}>{m.name} (Lv{m.level})</option>
-                  ))}
-                </select>
+                <>
+                  <select
+                    value={a.member_id}
+                    onChange={(e) => handleSwap(a.id, Number(e.target.value))}
+                    className={`bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-sm ${levelColor(a.member_level)} focus:border-blue-500 focus:outline-none`}
+                  >
+                    {members.map((m: any) => (
+                      <option key={m.id} value={m.id}>{m.name} (Lv{m.level})</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => handleDelete(a.id)}
+                    className="p-1 text-zinc-600 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                    title="移除此人"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </>
               ) : (
                 <span className="text-sm font-medium text-zinc-200">{a.member_name}</span>
               )}
