@@ -15,6 +15,7 @@ import {
   Lock,
   LogOut,
   Loader2,
+  Settings,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
@@ -26,6 +27,7 @@ const allMenuItems: { name: string; href: string; icon: any; minRole: MinRole }[
   { name: "週四報名", href: "/thursday", icon: ClipboardCheck, minRole: "visitor" },
   { name: "產出班表", href: "/generate", icon: CalendarPlus, minRole: "admin" },
   { name: "查看班表", href: "/schedule", icon: CalendarDays, minRole: "visitor" },
+  { name: "排班設定", href: "/settings", icon: Settings, minRole: "scheduler" },
 ];
 
 const roleLabels = {

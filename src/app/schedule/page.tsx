@@ -267,6 +267,32 @@ export default function SchedulePage() {
   }) {
     const key = `${date}:${slotId}:${role.id}`;
     const assignments = assignmentMap[key] || [];
+    const req = reqMap[`${slotId}:${role.id}`];
+    const maxCount = req ? Number(req.max_count) : 1;
+
+    // Determine if we can add more (scheduler/admin only)
+    const canAddMore = isSchedulerUser && assignments.length < maxCount;
+
+    // Add dropdown component
+    const AddDropdown = () => (
+      <div className="flex items-center gap-2">
+        <span className={`px-2 py-0.5 rounded text-xs border ${roleColor(role.name)}`}>
+          {role.name}
+        </span>
+        <select
+          defaultValue=""
+          onChange={(e) => {
+            if (e.target.value) handleAdd(date, slotId, role.id, Number(e.target.value));
+          }}
+          className="bg-zinc-800 border border-dashed border-zinc-600 rounded px-2 py-1 text-sm text-zinc-500 focus:border-blue-500 focus:outline-none"
+        >
+          <option value="" disabled>未排 ＋</option>
+          {members.map((m: any) => (
+            <option key={m.id} value={m.id}>{m.name} (Lv{m.level})</option>
+          ))}
+        </select>
+      </div>
+    );
 
     if (assignments.length > 0) {
       return (
@@ -291,6 +317,7 @@ export default function SchedulePage() {
               )}
             </div>
           ))}
+          {canAddMore && <AddDropdown />}
         </>
       );
     }
